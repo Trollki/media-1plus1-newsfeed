@@ -6,6 +6,7 @@ interface User {
   password: string;
   publishedCount: number;
   totalLikes: number;
+  isAdmin?: boolean;
 }
 
 interface NewsItem {
@@ -21,7 +22,7 @@ interface NewsItem {
 }
 
 const USERS: User[] = [
-  { username: 'Вадим', password: 'ЗМІ11', publishedCount: 0, totalLikes: 0 },
+  { username: 'Вадим', password: 'ЗМІ11', publishedCount: 0, totalLikes: 0, isAdmin: true },
   { username: 'Вася', password: 'ЗМІ1+1', publishedCount: 0, totalLikes: 0 }
 ];
 
@@ -39,6 +40,14 @@ const Index = () => {
   const [currentUser, setCurrentUser] = useState<string | null>(localStorage.getItem('currentUser'));
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  
+  // Адмін панель
+  const [users, setUsers] = useState<User[]>(() => {
+    const savedUsers = localStorage.getItem('users');
+    return savedUsers ? JSON.parse(savedUsers) : USERS;
+  });
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [userForm, setUserForm] = useState({ username: '', password: '' });
   
   // Авторизація
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
@@ -66,9 +75,14 @@ const Index = () => {
     localStorage.setItem('news', JSON.stringify(news));
   }, [news]);
 
+  // Збереження користувачів в localStorage
+  useEffect(() => {
+    localStorage.setItem('users', JSON.stringify(users));
+  }, [users]);
+
   // Логін
   const handleLogin = () => {
-    const user = USERS.find(u => u.username === loginForm.username && u.password === loginForm.password);
+    const user = users.find(u => u.username === loginForm.username && u.password === loginForm.password);
     if (user) {
       localStorage.setItem('currentUser', user.username);
       setCurrentUser(user.username);
@@ -136,6 +150,54 @@ const Index = () => {
   // Статистика
   const totalLikes = news.reduce((sum, item) => sum + item.likes, 0);
   const totalJournalists = new Set(news.map(item => item.author)).size;
+  
+  // Перевірка чи користувач адмін
+  const isAdmin = () => {
+    const user = users.find(u => u.username === currentUser);
+    return user?.isAdmin || false;
+  };
+
+  // Адмін функції
+  const handleAddUser = () => {
+    if (!userForm.username || !userForm.password) {
+      alert('Заповніть всі поля!');
+      return;
+    }
+    
+    if (users.some(u => u.username === userForm.username)) {
+      alert('Користувач з таким іменем вже існує!');
+      return;
+    }
+
+    setUsers(prev => [...prev, {
+      username: userForm.username,
+      password: userForm.password,
+      publishedCount: 0,
+      totalLikes: 0
+    }]);
+    setUserForm({ username: '', password: '' });
+  };
+
+  const handleDeleteUser = (username: string) => {
+    if (username === 'Вадим') {
+      alert('Неможна видалити головного адміністратора!');
+      return;
+    }
+    setUsers(prev => prev.filter(u => u.username !== username));
+  };
+
+  // Лідерборд
+  const getLeaderboard = () => {
+    return users.map(user => {
+      const userNews = news.filter(n => n.author === user.username);
+      const userLikes = userNews.reduce((sum, n) => sum + n.likes, 0);
+      return {
+        ...user,
+        publishedCount: userNews.length,
+        totalLikes: userLikes
+      };
+    }).sort((a, b) => b.totalLikes - a.totalLikes);
+  };
 
   // YouTube embed функція
   const getYouTubeEmbedUrl = (url: string) => {
@@ -167,6 +229,12 @@ const Index = () => {
             >
               Про нас
             </button>
+            <button 
+              onClick={() => setCurrentPage('leaderboard')}
+              className={`btn-news-ghost ${currentPage === 'leaderboard' ? 'bg-[hsl(var(--news-red-light))]' : ''}`}
+            >
+              Лідерборд
+            </button>
             {currentUser ? (
               <div className="flex items-center gap-4">
                 <button 
@@ -176,9 +244,17 @@ const Index = () => {
                   <Plus className="w-4 h-4 mr-2" />
                   Додати новину
                 </button>
+                {isAdmin() && (
+                  <button 
+                    onClick={() => setShowAdminPanel(true)}
+                    className="btn-news-outline"
+                  >
+                    Адмін панель
+                  </button>
+                )}
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <User className="w-4 h-4" />
-                  {currentUser}
+                  {currentUser} {isAdmin() && '(Адмін)'}
                 </div>
                 <button onClick={handleLogout} className="btn-news-ghost">
                   <LogOut className="w-4 h-4" />
@@ -219,6 +295,12 @@ const Index = () => {
               >
                 Про нас
               </button>
+              <button 
+                onClick={() => { setCurrentPage('leaderboard'); setIsMenuOpen(false); }}
+                className="btn-news-ghost justify-start"
+              >
+                Лідерборд
+              </button>
               {currentUser ? (
                 <>
                   <button 
@@ -228,9 +310,17 @@ const Index = () => {
                     <Plus className="w-4 h-4 mr-2" />
                     Додати новину
                   </button>
+                  {isAdmin() && (
+                    <button 
+                      onClick={() => { setShowAdminPanel(true); setIsMenuOpen(false); }}
+                      className="btn-news-outline justify-start"
+                    >
+                      Адмін панель
+                    </button>
+                  )}
                   <div className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground">
                     <User className="w-4 h-4" />
-                    {currentUser}
+                    {currentUser} {isAdmin() && '(Адмін)'}
                   </div>
                   <button onClick={() => { handleLogout(); setIsMenuOpen(false); }} className="btn-news-ghost justify-start">
                     <LogOut className="w-4 h-4 mr-2" />
@@ -515,6 +605,154 @@ const Index = () => {
     </div>
   );
 
+  const renderLeaderboardPage = () => {
+    const leaderboard = getLeaderboard();
+    
+    return (
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold mb-8">🏆 Лідерборд журналістів</h1>
+        
+        <div className="grid gap-6">
+          {leaderboard.map((user, index) => (
+            <div key={user.username} className="news-card">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="text-3xl">
+                    {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`}
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold">
+                      {user.username} 
+                      {user.isAdmin && <span className="text-sm ml-2 px-2 py-1 bg-primary text-white rounded-full">Адмін</span>}
+                    </h3>
+                    <div className="flex gap-4 text-sm text-muted-foreground mt-1">
+                      <span>📰 {user.publishedCount} новин</span>
+                      <span>❤️ {user.totalLikes} лайків</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="text-right">
+                  <div className="text-2xl font-bold text-primary">{user.totalLikes}</div>
+                  <div className="text-sm text-muted-foreground">загальний рейтинг</div>
+                </div>
+              </div>
+            </div>
+          ))}
+          
+          {leaderboard.length === 0 && (
+            <div className="text-center py-16">
+              <p className="text-lg text-muted-foreground">Поки що немає журналістів у списку</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderAdminPanel = () => {
+    if (!showAdminPanel || !isAdmin()) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-primary">Адмін панель</h2>
+            <button 
+              onClick={() => setShowAdminPanel(false)}
+              className="btn-news-ghost"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="space-y-8">
+            {/* Додавання користувача */}
+            <div className="news-card">
+              <h3 className="text-xl font-bold mb-4">Додати нового журналіста</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <input
+                  type="text"
+                  value={userForm.username}
+                  onChange={(e) => setUserForm(prev => ({ ...prev, username: e.target.value }))}
+                  className="form-input"
+                  placeholder="Ім'я користувача"
+                />
+                <input
+                  type="password"
+                  value={userForm.password}
+                  onChange={(e) => setUserForm(prev => ({ ...prev, password: e.target.value }))}
+                  className="form-input"
+                  placeholder="Пароль"
+                />
+                <button onClick={handleAddUser} className="btn-news">
+                  Додати
+                </button>
+              </div>
+            </div>
+
+            {/* Список користувачів */}
+            <div className="news-card">
+              <h3 className="text-xl font-bold mb-4">Управління журналістами</h3>
+              <div className="space-y-3">
+                {users.map(user => (
+                  <div key={user.username} className="flex items-center justify-between p-4 border border-border rounded-lg">
+                    <div className="flex items-center gap-4">
+                      <div>
+                        <h4 className="font-medium">
+                          {user.username}
+                          {user.isAdmin && <span className="text-sm ml-2 px-2 py-1 bg-primary text-white rounded-full">Адмін</span>}
+                        </h4>
+                        <div className="text-sm text-muted-foreground">
+                          {news.filter(n => n.author === user.username).length} новин • 
+                          {news.filter(n => n.author === user.username).reduce((sum, n) => sum + n.likes, 0)} лайків
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      {user.username !== 'Вадим' && (
+                        <button 
+                          onClick={() => handleDeleteUser(user.username)}
+                          className="btn-news-outline text-red-600 hover:bg-red-50"
+                        >
+                          Видалити
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Статистика */}
+            <div className="news-card">
+              <h3 className="text-xl font-bold mb-4">📊 Загальна статистика</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="text-center p-4 bg-muted rounded-lg">
+                  <div className="text-2xl font-bold text-primary">{users.length}</div>
+                  <div className="text-sm text-muted-foreground">Журналістів</div>
+                </div>
+                <div className="text-center p-4 bg-muted rounded-lg">
+                  <div className="text-2xl font-bold text-primary">{news.length}</div>
+                  <div className="text-sm text-muted-foreground">Новин</div>
+                </div>
+                <div className="text-center p-4 bg-muted rounded-lg">
+                  <div className="text-2xl font-bold text-primary">{totalLikes}</div>
+                  <div className="text-sm text-muted-foreground">Лайків</div>
+                </div>
+                <div className="text-center p-4 bg-muted rounded-lg">
+                  <div className="text-2xl font-bold text-primary">{totalJournalists}</div>
+                  <div className="text-sm text-muted-foreground">Активних</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderAboutPage = () => (
     <div className="max-w-4xl mx-auto">
       <h1 className="text-3xl font-bold mb-8">Про ЗМІ 1+1</h1>
@@ -610,6 +848,7 @@ const Index = () => {
         {currentPage === 'home' && renderHomePage()}
         {currentPage === 'publish' && currentUser && renderPublishPage()}
         {currentPage === 'about' && renderAboutPage()}
+        {currentPage === 'leaderboard' && renderLeaderboardPage()}
         
         {currentPage === 'publish' && !currentUser && (
           <div className="text-center py-16">
@@ -627,6 +866,7 @@ const Index = () => {
       </main>
 
       {renderLoginModal()}
+      {renderAdminPanel()}
       
       {/* Футер */}
       <footer className="bg-muted mt-16 py-8">
