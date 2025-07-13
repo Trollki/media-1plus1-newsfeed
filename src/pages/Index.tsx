@@ -367,7 +367,7 @@ const Index = () => {
       ) : (
         <div className={viewMode === 'grid' ? 'news-card-grid' : 'news-card-list'}>
           {filteredNews.map(item => (
-            <article key={item.id} className="news-card fade-in">
+            <article key={item.id} className="news-card animate-in fade-in duration-300">
               {/* Бейджі */}
               <div className="flex gap-2 mb-4">
                 {item.likes >= 10 && (
